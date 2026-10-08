@@ -46,13 +46,25 @@ timeout "$TIMEOUT" "$MUTATOR" "$SEED_FILE" --count="$COUNT" --seed="$SEED" \
   --alive2-safe 2>/dev/null | tr '\0' '\n' > "$work/safe"
 
 safe_bad=0
-for pat in 'volatile' 'noalias' '\bafn\b' '\barcp\b' '\bcontract\b' '\breassoc\b' '\bfast\b' 'vscale'; do
+for pat in 'volatile' 'noalias' '\bafn\b' '\barcp\b' '\bcontract\b' '\breassoc\b' '\bfast\b' 'vscale' 'range\('; do
   hits=$(grep -cP "$pat" "$work/safe")
   if [ "$hits" -ne 0 ]; then
     echo "FAIL: --alive2-safe emitted $hits occurrences of /$pat/" >&2
     safe_bad=1
   fi
 done
+
+# No function may call itself: Alive2 reports a recursive callee as "function
+# did not return". Only direct self-calls are checked here; the scrubber breaks
+# longer cycles too, but spotting those needs a real call graph.
+rec=$(awk '
+  /^define/ { cur = ""; if (match($0, /@[-A-Za-z0-9_.$]+\(/)) cur = substr($0, RSTART+1, RLENGTH-2); next }
+  /call/    { if (cur != "" && index($0, "@" cur "(")) n++ }
+  END { print n+0 }' "$work/safe")
+if [ "$rec" -ne 0 ]; then
+  echo "FAIL: --alive2-safe emitted $rec recursive call(s)" >&2
+  safe_bad=1
+fi
 
 # The flags Alive2 models exactly must still get through, or the scrubber is
 # simply deleting everything.

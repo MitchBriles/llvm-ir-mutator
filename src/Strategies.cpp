@@ -11,6 +11,7 @@
 #include "Strategies.h"
 #include "Config.h"
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -26,6 +27,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+
+#include <functional>
 
 using namespace llvm;
 
@@ -544,6 +547,8 @@ public:
 //===----------------------------------------------------------------------===//
 
 class AttrsStrategy : public Pathway {
+  bool AllowRange;
+
   static void toggle(Function &F, unsigned Idx, Attribute::AttrKind K) {
     if (F.getAttributes().hasAttributeAtIndex(Idx, K))
       F.removeAttributeAtIndex(Idx, K);
@@ -552,6 +557,8 @@ class AttrsStrategy : public Pathway {
   }
 
 public:
+  explicit AttrsStrategy(bool AllowRange) : AllowRange(AllowRange) {}
+
   using IRMutationStrategy::mutate;
   void mutate(Function &F, RandomIRBuilder &IB) override {
     if (F.isDeclaration())
@@ -613,7 +620,8 @@ public:
               Arg->addAttr(K);
           });
       }
-      if (A.getType()->isIntegerTy() && A.getType()->getIntegerBitWidth() > 1) {
+      if (AllowRange && A.getType()->isIntegerTy() &&
+          A.getType()->getIntegerBitWidth() > 1) {
         Mods.push_back([Arg, &IB] {
           unsigned W = Arg->getType()->getIntegerBitWidth();
           APInt Lo(W, pick(IB.Rand, 16)), Hi(W, pick(IB.Rand, 16) + 16);
@@ -787,8 +795,60 @@ public:
 
 } // namespace
 
-bool mutator::scrubForAlive2(Module &M) {
+namespace {
+
+/// Erase a call, giving its uses poison. The call is gone rather than
+/// rewritten because a scrub has no business inventing a replacement.
+void eraseCall(CallInst *CI) {
+  if (!CI->getType()->isVoidTy())
+    CI->replaceAllUsesWith(PoisonValue::get(CI->getType()));
+  CI->eraseFromParent();
+}
+
+/// Break every cycle in the module's direct call graph by erasing a call that
+/// closes one. Alive2 cannot reason about a recursive call: it reports the
+/// callee as "function did not return", and every refinement check downstream
+/// of that is noise rather than a codegen result.
+bool breakRecursion(Module &M) {
   bool Changed = false;
+  // 0 = unvisited, 1 = on the current DFS path, 2 = done.
+  DenseMap<Function *, unsigned> Color;
+
+  std::function<void(Function &)> visit = [&](Function &F) {
+    Color[&F] = 1;
+    SmallVector<CallInst *, 8> Cycle;
+    for (Instruction &I : instructions(F)) {
+      auto *CI = dyn_cast<CallInst>(&I);
+      if (!CI || CI->isMustTailCall())
+        continue;
+      Function *Callee = CI->getCalledFunction();
+      // An indirect call cannot be shown to close a cycle, and a declaration
+      // has no body to recurse through.
+      if (!Callee || Callee->isDeclaration())
+        continue;
+      unsigned C = Color.lookup(Callee);
+      if (C == 1)
+        Cycle.push_back(CI);   // back edge: this call closes a cycle
+      else if (C == 0)
+        visit(*Callee);
+    }
+    for (CallInst *CI : Cycle) {
+      eraseCall(CI);
+      Changed = true;
+    }
+    Color[&F] = 2;
+  };
+
+  for (Function &F : M)
+    if (!F.isDeclaration() && Color.lookup(&F) == 0)
+      visit(F);
+  return Changed;
+}
+
+} // namespace
+
+bool mutator::scrubForAlive2(Module &M) {
+  bool Changed = breakRecursion(M);
 
   auto dropNoAlias = [&](Function &F) {
     if (F.hasRetAttribute(Attribute::NoAlias)) {
@@ -862,7 +922,8 @@ mutator::ConstantPool mutator::harvestConstants(const Module &M) {
 }
 
 std::unique_ptr<IRMutationStrategy>
-mutator::createStrategy(StringRef Name, const ConstantPool &Pool) {
+mutator::createStrategy(StringRef Name, const ConstantPool &Pool,
+                        bool Alive2Safe) {
   if (Name == "flags")
     return std::make_unique<FlagsStrategy>();
   if (Name == "const")
@@ -874,7 +935,7 @@ mutator::createStrategy(StringRef Name, const ConstantPool &Pool) {
   if (Name == "break-use")
     return std::make_unique<BreakUseStrategy>();
   if (Name == "attrs")
-    return std::make_unique<AttrsStrategy>();
+    return std::make_unique<AttrsStrategy>(/*AllowRange=*/!Alive2Safe);
   if (Name == "wrap")
     return std::make_unique<WrapStrategy>();
   if (Name == "move")

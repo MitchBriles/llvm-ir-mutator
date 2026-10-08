@@ -31,7 +31,7 @@ Type *withElement(Type *Ty, Type *NewElt) {
 }
 
 IRBuilder<> builderAt(BasicBlock::iterator IP) {
-  return IRBuilder<>(IP->getParent(), IP);
+  return IRBuilder<>(IP);
 }
 
 //===----------------------------------------------------------------------===//

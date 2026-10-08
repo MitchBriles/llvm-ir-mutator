@@ -126,6 +126,19 @@ Refused outright by Alive2's translator, so the mutant is wasted:
 | `load volatile` / `store volatile` | `ERROR: Unsupported instruction` |
 | `noalias` on a pointer argument | `ERROR: Unsupported attribute` |
 | scalable vectors | `ERROR: Unsupported type` |
+| a recursive call | callee reads as `function did not return` |
+| `range(...)` on a parameter | an out-of-range argument is poison that lifted code cannot mirror |
+
+`range` is never added under `--alive2-safe`; attributes already in the seed
+are kept.
+
+Recursion is the one entry that is scrubbed rather than refused: the mutant
+still verifies, but Alive2 models the recursive callee as never returning, so
+the refinement check reports a difference for every such mutant no matter what
+the backend did. `--alive2-safe` therefore breaks every cycle in the module's
+direct call graph, erasing the call that closes it and giving its uses poison.
+Indirect calls and calls to declarations are left alone, since neither can be
+shown to close a cycle.
 
 The more annoying ones are those which can silently fail: `afn`, `arcp`,
 `contract` and `reassoc` are modelled as uninterpreted functions (`ir/instr.cpp`,

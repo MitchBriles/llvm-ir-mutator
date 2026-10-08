@@ -85,7 +85,7 @@ Mutator::Mutator(const Module &SeedModule, const Options &O)
     else if (Name == "shuffle")
       S = std::make_unique<ShuffleBlockStrategy>();
     else
-      S = createStrategy(Name, Pool);
+      S = createStrategy(Name, Pool, Opts.Alive2Safe);
     assert(S && "config::strategies() names a pathway nothing constructs");
 
     Names.emplace_back(Name);
@@ -165,16 +165,17 @@ std::unique_ptr<Module> Mutator::mutate(uint64_t MutantSeed,
     if (Opts.Alive2Safe)
       scrubForAlive2(*Cur);
 
+    if (Opts.RollbackPerStep && verifyModule(*Cur, nullptr)) {
+      Stats[Idx].Invalid++;
+      Cur = std::move(Prev);
+      continue;
+    }
+    
     std::string NewText = render(*Cur);
     if (NewText == CurText) {
       Stats[Idx].NoOp++;
       if (Prev)
         Cur = std::move(Prev);
-      continue;
-    }
-    if (Opts.RollbackPerStep && verifyModule(*Cur, nullptr)) {
-      Stats[Idx].Invalid++;
-      Cur = std::move(Prev);
       continue;
     }
 

@@ -33,8 +33,9 @@ ConstantPool harvestConstants(const llvm::Module &M);
 bool scrubForAlive2(llvm::Module &M);
 
 /// Build the named custom strategy, or nullptr if \p Name is not one of ours.
-/// \p Pool is borrowed and must outlive the returned strategy.
+/// \p Pool is borrowed and must outlive the returned strategy. \p Alive2Safe
+/// withholds mutations Alive2 cannot check against lifted assembly.
 std::unique_ptr<llvm::IRMutationStrategy>
-createStrategy(llvm::StringRef Name, const ConstantPool &Pool);
+createStrategy(llvm::StringRef Name, const ConstantPool &Pool, bool Alive2Safe);
 
 } // namespace mutator
