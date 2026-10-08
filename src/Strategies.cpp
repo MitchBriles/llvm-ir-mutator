@@ -819,7 +819,7 @@ bool breakRecursion(Module &M) {
     SmallVector<CallInst *, 8> Cycle;
     for (Instruction &I : instructions(F)) {
       auto *CI = dyn_cast<CallInst>(&I);
-      if (!CI || CI->isMustTailCall())
+      if (!CI)
         continue;
       Function *Callee = CI->getCalledFunction();
       // An indirect call cannot be shown to close a cycle, and a declaration

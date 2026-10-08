@@ -59,7 +59,7 @@ done
 # longer cycles too, but spotting those needs a real call graph.
 rec=$(awk '
   /^define/ { cur = ""; if (match($0, /@[-A-Za-z0-9_.$]+\(/)) cur = substr($0, RSTART+1, RLENGTH-2); next }
-  /call/    { if (cur != "" && index($0, "@" cur "(")) n++ }
+  /[ =]call / { if (cur != "" && index($0, "@" cur "(")) n++ }
   END { print n+0 }' "$work/safe")
 if [ "$rec" -ne 0 ]; then
   echo "FAIL: --alive2-safe emitted $rec recursive call(s)" >&2

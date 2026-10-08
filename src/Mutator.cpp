@@ -37,6 +37,18 @@ bool listed(ArrayRef<std::string> L, StringRef Name) {
   return is_contained(L, Name);
 }
 
+/// Upstream ends a musttail block's insertion range at the musttail call, so
+/// picking that call hands connectToSink an empty range, and its store
+/// fallback then reads back() of it.
+class SinkStrategy : public SinkInstructionStrategy {
+public:
+  using SinkInstructionStrategy::mutate;
+  void mutate(BasicBlock &BB, RandomIRBuilder &IB) override {
+    if (!BB.getTerminatingMustTailCall())
+      SinkInstructionStrategy::mutate(BB, IB);
+  }
+};
+
 /// The types backend-tv's RISC-V lifter accepts. Its AArch64 lifter also takes
 /// short vectors, which this rejects.
 bool liftableType(Type *T) {
@@ -117,7 +129,7 @@ Mutator::Mutator(const Module &SeedModule, const Options &O)
     else if (Name == "insert-phi")
       S = std::make_unique<InsertPHIStrategy>();
     else if (Name == "sink")
-      S = std::make_unique<SinkInstructionStrategy>();
+      S = std::make_unique<SinkStrategy>();
     else if (Name == "shuffle")
       S = std::make_unique<ShuffleBlockStrategy>();
     else
