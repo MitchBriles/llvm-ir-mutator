@@ -87,6 +87,13 @@ cl::opt<bool>
                         "contract/reassoc fast-math flags"),
                cl::init(false), cl::cat(MutatorCat));
 
+cl::opt<bool> LifterTypes(
+    "lifter-types",
+    cl::desc("Reject mutations that introduce vector types or floating-point "
+             "types other than half, float and double, which backend-tv's "
+             "RISC-V lifter cannot handle"),
+    cl::init(false), cl::cat(MutatorCat));
+
 cl::opt<bool> Report("report",
                      cl::desc("Print a per-pathway table to stderr on exit"),
                      cl::init(false), cl::cat(MutatorCat));
@@ -158,6 +165,7 @@ int main(int argc, char **argv) {
   Opts.RollbackPerStep = Rollback != "mutant";
   Opts.BaselineOps = BaselineOps;
   Opts.Alive2Safe = Alive2Safe;
+  Opts.LifterTypes = LifterTypes;
   Opts.MaxSize = MaxSize;
   Opts.Only.assign(Only.begin(), Only.end());
   Opts.Disable.assign(Disable.begin(), Disable.end());

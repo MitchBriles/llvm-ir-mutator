@@ -46,7 +46,7 @@ timeout "$TIMEOUT" "$MUTATOR" "$SEED_FILE" --count="$COUNT" --seed="$SEED" \
   --alive2-safe 2>/dev/null | tr '\0' '\n' > "$work/safe"
 
 safe_bad=0
-for pat in 'volatile' 'noalias' '\bafn\b' '\barcp\b' '\bcontract\b' '\breassoc\b' '\bfast\b' 'vscale' 'range\('; do
+for pat in 'volatile' 'noalias' '\bafn\b' '\barcp\b' '\bcontract\b' '\breassoc\b' '\bfast\b' 'vscale' 'range\(' 'itofp (nnan|ninf|nsz)'; do
   hits=$(grep -cP "$pat" "$work/safe")
   if [ "$hits" -ne 0 ]; then
     echo "FAIL: --alive2-safe emitted $hits occurrences of /$pat/" >&2

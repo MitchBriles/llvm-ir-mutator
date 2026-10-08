@@ -12,6 +12,7 @@
 #include "Ops.h"
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
@@ -36,6 +37,37 @@ bool listed(ArrayRef<std::string> L, StringRef Name) {
   return is_contained(L, Name);
 }
 
+/// The types backend-tv's RISC-V lifter accepts. Its AArch64 lifter also takes
+/// short vectors, which this rejects.
+bool liftableType(Type *T) {
+  if (T->isVectorTy())
+    return false;
+  if (T->isFloatingPointTy())
+    return T->isHalfTy() || T->isFloatTy() || T->isDoubleTy();
+  if (auto *ST = dyn_cast<StructType>(T))
+    return all_of(ST->elements(), liftableType);
+  if (auto *AT = dyn_cast<ArrayType>(T))
+    return liftableType(AT->getElementType());
+  return true;
+}
+
+bool usesUnliftableType(const Module &M) {
+  for (const Function &F : M) {
+    FunctionType *FTy = F.getFunctionType();
+    if (!liftableType(FTy->getReturnType()) ||
+        !all_of(FTy->params(), liftableType))
+      return true;
+    for (const Instruction &I : instructions(F)) {
+      if (!liftableType(I.getType()))
+        return true;
+      for (const Value *Op : I.operands())
+        if (!liftableType(Op->getType()))
+          return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 Mutator::Mutator(const Module &SeedModule, const Options &O)
@@ -49,6 +81,10 @@ Mutator::Mutator(const Module &SeedModule, const Options &O)
       auto *VT = dyn_cast<VectorType>(T);
       return VT && VT->getElementCount().isScalable();
     });
+  if (Opts.LifterTypes) {
+    llvm::erase_if(Types, [](Type *T) { return !liftableType(T); });
+    SeedUnliftable = usesUnliftableType(Seed);
+  }
   assert(!Types.empty() && "config::typePool must not be empty");
   IB = std::make_unique<RandomIRBuilder>(static_cast<int>(O.Seed), Types);
   IB->MinArgNum = config::MinArgNum;
@@ -165,7 +201,9 @@ std::unique_ptr<Module> Mutator::mutate(uint64_t MutantSeed,
     if (Opts.Alive2Safe)
       scrubForAlive2(*Cur);
 
-    if (Opts.RollbackPerStep && verifyModule(*Cur, nullptr)) {
+    if (Opts.RollbackPerStep &&
+        (verifyModule(*Cur, nullptr) ||
+         (Opts.LifterTypes && !SeedUnliftable && usesUnliftableType(*Cur)))) {
       Stats[Idx].Invalid++;
       Cur = std::move(Prev);
       continue;
@@ -186,7 +224,9 @@ std::unique_ptr<Module> Mutator::mutate(uint64_t MutantSeed,
 
   // Without per-step rollback nothing has checked validity yet, so do it once
   // and fall back to the untouched seed rather than emit a broken mutant.
-  if (!Opts.RollbackPerStep && verifyModule(*Cur, nullptr)) {
+  if (!Opts.RollbackPerStep &&
+      (verifyModule(*Cur, nullptr) ||
+       (Opts.LifterTypes && !SeedUnliftable && usesUnliftableType(*Cur)))) {
     for (StringRef Name : Applied)
       Stats[find(Names, Name) - Names.begin()].Invalid++;
     Applied.clear();

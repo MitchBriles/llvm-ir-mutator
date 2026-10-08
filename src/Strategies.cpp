@@ -891,8 +891,12 @@ bool mutator::scrubForAlive2(Module &M) {
 
       if (isa<FPMathOperator>(&I)) {
         FastMathFlags F = I.getFastMathFlags();
-        if (F.allowReassoc() || F.allowReciprocal() || F.allowContract() ||
-            F.approxFunc()) {
+        // Alive2 refuses any fast-math flag on an int-to-FP conversion.
+        if ((isa<SIToFPInst>(I) || isa<UIToFPInst>(I)) && F.any()) {
+          I.copyFastMathFlags(FastMathFlags());
+          Changed = true;
+        } else if (F.allowReassoc() || F.allowReciprocal() ||
+                   F.allowContract() || F.approxFunc()) {
           I.setHasAllowReassoc(false);
           I.setHasAllowReciprocal(false);
           I.setHasAllowContract(false);

@@ -35,7 +35,8 @@ struct Options {
   bool RollbackPerStep = true; ///< false: verify once per mutant instead
   bool BaselineOps = false;    ///< restrict `inject` to LLVM's default op set
   bool Alive2Safe = false;     ///< emit only what Alive2 can reason about
-  size_t MaxSize = 0;          ///< 0 means seed size + config::SizeHeadroom
+  bool LifterTypes = false;    ///< no vectors, no FP but half/float/double
+  size_t MaxSize = 0;         ///< 0 means seed size + config::SizeHeadroom
   std::vector<std::string> Only;
   std::vector<std::string> Disable;
 };
@@ -69,6 +70,7 @@ private:
   std::vector<std::unique_ptr<llvm::IRMutationStrategy>> Strategies;
   std::vector<PathwayStats> Stats;
   size_t MaxSize = 0;
+  bool SeedUnliftable = false;
 
   /// Index of a pathway chosen by weight, or Names.size() if none is eligible.
   size_t sample(size_t CurSize);

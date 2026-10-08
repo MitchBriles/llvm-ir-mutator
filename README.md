@@ -52,6 +52,7 @@ its own, which is what you want once a mutant has found something.
 | `--max-size=N` | module object budget |
 | `--emit=ll\|bc` | output format |
 | `--alive2-safe` | emit only what Alive2 can reason about (see below) |
+| `--lifter-types` | reject mutations that add vector types or FP types other than `half`/`float`/`double` |
 | `--report` | per-pathway table to stderr on exit |
 
 ## Pathways
@@ -114,6 +115,9 @@ all. `src/Ops.cpp` adds all of them. Measured over 300 mutants of
 
 The type pool is also wider: odd integer widths (`i2`, `i3`, `i7`, `i17`),
 `half`, `bfloat`, `fp128`, and vectors including a non-power-of-two lane count.
+backend-tv's RISC-V lifter refuses vectors and every FP type but `half`,
+`float` and `double`; `--lifter-types` keeps those out of the pool and rolls
+back any mutation that introduces one anyway, unless the seed already had one.
 
 **Alive2 compatibility.** By default the mutator emits anything the LLVM
 verifier accepts, which includes a few things Alive2 cannot use. `--alive2-safe`
@@ -128,6 +132,7 @@ Refused outright by Alive2's translator, so the mutant is wasted:
 | scalable vectors | `ERROR: Unsupported type` |
 | a recursive call | callee reads as `function did not return` |
 | `range(...)` on a parameter | an out-of-range argument is poison that lifted code cannot mirror |
+| fast-math flags on `sitofp`/`uitofp` | `ERROR: Unsupported instruction` |
 
 `range` is never added under `--alive2-safe`; attributes already in the seed
 are kept.
