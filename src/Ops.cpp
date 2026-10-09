@@ -30,9 +30,7 @@ Type *withElement(Type *Ty, Type *NewElt) {
   return NewElt;
 }
 
-IRBuilder<> builderAt(BasicBlock::iterator IP) {
-  return IRBuilder<>(IP);
-}
+IRBuilder<> builderAt(BasicBlock::iterator IP) { return IRBuilder<>(IP); }
 
 //===----------------------------------------------------------------------===//
 // Casts

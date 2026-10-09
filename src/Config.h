@@ -59,8 +59,8 @@ inline const std::vector<StrategySpec> &strategies() {
 }
 
 /// Enable scalable vector types in the pool below. Note that --alive2-safe
-/// filters these out regardless, since Alive2 has no model for them. Many passes and most
-/// targets reject them outright, so this is off by default.
+/// filters these out regardless, since Alive2 has no model for them. Many
+/// passes and most targets reject them outright, so this is off by default.
 inline constexpr bool ScalableVectors = false;
 
 /// Types the mutator may invent values of. RandomIRBuilder::randomType() draws

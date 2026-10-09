@@ -133,9 +133,13 @@ Refused outright by Alive2's translator, so the mutant is wasted:
 | a recursive call | callee reads as `function did not return` |
 | `range(...)` on a parameter | an out-of-range argument is poison that lifted code cannot mirror |
 | fast-math flags on `sitofp`/`uitofp` | `ERROR: Unsupported instruction` |
+| a load or store through `poison`/`undef` | `ERROR: Source function is always UB` |
 
 `range` is never added under `--alive2-safe`; attributes already in the seed
 are kept.
+
+FuzzMutate invents a `poison` pointer when it needs one and has none; the
+scrubber erases the loads and stores through it, giving a load's uses poison.
 
 Recursion is the one entry that is scrubbed rather than refused: the mutant
 still verifies, but Alive2 models the recursive callee as never returning, so

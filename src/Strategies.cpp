@@ -828,7 +828,7 @@ bool breakRecursion(Module &M) {
         continue;
       unsigned C = Color.lookup(Callee);
       if (C == 1)
-        Cycle.push_back(CI);   // back edge: this call closes a cycle
+        Cycle.push_back(CI); // back edge: this call closes a cycle
       else if (C == 0)
         visit(*Callee);
     }
@@ -849,6 +849,20 @@ bool breakRecursion(Module &M) {
 
 bool mutator::scrubForAlive2(Module &M) {
   bool Changed = breakRecursion(M);
+
+  // FuzzMutate invents a poison pointer when it needs one and has none. A load
+  // or store through it is immediate UB, so Alive2 would discard the mutant as
+  // "Source function is always UB".
+  for (Function &F : M)
+    for (Instruction &I : make_early_inc_range(instructions(F))) {
+      Value *Ptr = getLoadStorePointerOperand(&I);
+      if (!Ptr || !isa<UndefValue>(Ptr))
+        continue;
+      if (!I.getType()->isVoidTy())
+        I.replaceAllUsesWith(PoisonValue::get(I.getType()));
+      I.eraseFromParent();
+      Changed = true;
+    }
 
   auto dropNoAlias = [&](Function &F) {
     if (F.hasRetAttribute(Attribute::NoAlias)) {

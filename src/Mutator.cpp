@@ -220,7 +220,7 @@ std::unique_ptr<Module> Mutator::mutate(uint64_t MutantSeed,
       Cur = std::move(Prev);
       continue;
     }
-    
+
     std::string NewText = render(*Cur);
     if (NewText == CurText) {
       Stats[Idx].NoOp++;

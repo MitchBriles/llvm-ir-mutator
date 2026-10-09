@@ -36,7 +36,7 @@ struct Options {
   bool BaselineOps = false;    ///< restrict `inject` to LLVM's default op set
   bool Alive2Safe = false;     ///< emit only what Alive2 can reason about
   bool LifterTypes = false;    ///< no vectors, no FP but half/float/double
-  size_t MaxSize = 0;         ///< 0 means seed size + config::SizeHeadroom
+  size_t MaxSize = 0;          ///< 0 means seed size + config::SizeHeadroom
   std::vector<std::string> Only;
   std::vector<std::string> Disable;
 };
